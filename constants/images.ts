@@ -1,0 +1,15 @@
+export const images = {
+  logo: require('../assets/images/logo.png'),
+  tires: require('../assets/images/tires.png'),
+  lubricants: require('../assets/images/lubricants.png'),
+  battery: require('../assets/images/battery.png'),
+  products: require('../assets/images/products.png'),
+  branches: require('../assets/images/branches.png'),
+  services: require('../assets/images/services.png'),
+  customerService: require('../assets/images/customer-service.png'),
+  rewards: require('../assets/images/rewards.png'),
+  offers: require('../assets/images/offers.png'),
+  promo1: require('../assets/images/promo1.jpg'),
+  promo2: require('../assets/images/promo2.jpg'),
+  promo3: require('../assets/images/promo3.jpg'),
+};
