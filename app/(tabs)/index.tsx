@@ -5,19 +5,23 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { images } from '@/constants/images';
 import { Colors } from '@/constants/theme';
+import { useCart } from '@/contexts/CartContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native';
 
 interface ServiceCardProps {
   icon: { uri: string };
   title: string;
+  onPress?: () => void;
 }
 
 interface QuickButtonProps {
   title: string;
   style?: ViewStyle;
+  onPress?: () => void;
 }
 
 const promotions = [
@@ -26,15 +30,15 @@ const promotions = [
   { id: '3', image: images.promo3 },
 ];
 
-const ServiceCard = ({ icon, title }: ServiceCardProps) => (
-  <TouchableOpacity style={styles.serviceCard}>
+const ServiceCard = ({ icon, title, onPress }: ServiceCardProps) => (
+  <TouchableOpacity style={styles.serviceCard} onPress={onPress}>
     <Image source={icon} style={styles.serviceIcon} contentFit="contain" />
     <ThemedText style={styles.serviceText}>{title}</ThemedText>
   </TouchableOpacity>
 );
 
-const QuickButton = ({ title, style }: QuickButtonProps) => (
-  <TouchableOpacity style={[styles.quickButton, style]}>
+const QuickButton = ({ title, style, onPress }: QuickButtonProps) => (
+  <TouchableOpacity style={[styles.quickButton, style]} onPress={onPress}>
     <ThemedText style={styles.quickButtonText}>{title}</ThemedText>
   </TouchableOpacity>
 );
@@ -43,6 +47,8 @@ export default function HomeScreen() {
   const [activeSlide, setActiveSlide] = useState(0);
   const colorScheme = useColorScheme();
   const iconColor = Colors[colorScheme ?? 'light'].text;
+  const router = useRouter();
+  const { getCartCount } = useCart();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -51,10 +57,15 @@ export default function HomeScreen() {
         <View style={styles.topBar}>
           <Image source={images.logo} style={styles.logo} />
           <View style={styles.headerIcons}>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/cart')}>
               <CartIcon size={24} color={iconColor} />
+              {getCartCount() > 0 && (
+                <View style={styles.cartBadge}>
+                  <ThemedText style={styles.cartBadgeText}>{getCartCount()}</ThemedText>
+                </View>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/notifications')}>
               <NotificationIcon size={24} color={iconColor} />
             </TouchableOpacity>
           </View>
@@ -99,8 +110,8 @@ export default function HomeScreen() {
 
         <View style={styles.servicesGrid}>
           <ServiceCard icon={images.tires} title="TIRES" />
-          <ServiceCard icon={images.lubricants} title="LUBRICANTS" />
-          <ServiceCard icon={images.battery} title="BATTERIES" />
+          <ServiceCard icon={images.lubricants} title="LUBRICANTS" onPress={() => router.push('/lubricants-listing')} />
+          <ServiceCard icon={images.battery} title="BATTERIES" onPress={() => router.push('/batteries-listing')} />
         </View>
 
         <View style={styles.quickLinks}>
@@ -111,13 +122,14 @@ export default function HomeScreen() {
           <QuickButton 
             title="Book your Appointment" 
             style={styles.bookAppointment}
+            onPress={() => router.push('/our-products')}
           />
         </View>
 
         <View style={styles.servicesGrid}>
-          <ServiceCard icon={images.products} title="Our Products" />
-          <ServiceCard icon={images.branches} title="Branches" />
-          <ServiceCard icon={images.services} title="Our Services" />
+          <ServiceCard icon={images.products} title="Our Products" onPress={() => router.push('/our-products')} />
+          <ServiceCard icon={images.branches} title="Branches" onPress={() => router.push('/our-branches')} />
+          <ServiceCard icon={images.services} title="Our Services" onPress={() => router.push('/our-services')} />
           <ServiceCard icon={images.customerService} title="Our Customer Service" />
           <ServiceCard icon={images.rewards} title="Rewarding System" />
           <ServiceCard icon={images.offers} title="Special Offers" />
@@ -158,6 +170,22 @@ const styles = StyleSheet.create({
   headerIcons: {
     flexDirection: 'row',
     gap: 15,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -8,
+    backgroundColor: '#E41E26',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cartBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   icon: {
     width: 24,

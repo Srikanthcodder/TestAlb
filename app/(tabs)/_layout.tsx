@@ -44,6 +44,102 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="tires"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="batteries"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="lubricants"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="equipment"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="accessories"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="our-products"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="our-services"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="car-wash-door-to-door"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="car-wash-in-service-station"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="tinting-protection"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="mobile-van-service"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="our-branches"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="lubricants-listing"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="batteries-listing"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
