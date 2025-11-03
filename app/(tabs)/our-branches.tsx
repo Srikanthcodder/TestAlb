@@ -1,84 +1,32 @@
 import BackButton from '@/components/BackButton';
+import { branchService, type Branch } from '@/services';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Linking,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Linking,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
-// Configurable branch locations - Easy to modify
-const branchLocations = [
-  {
-    id: 1,
-    name: 'Shuwaikh Branch',
-    address: 'Shuwaikh Industrial Area, Block 1, Street 12',
-    phone: '+965 2481 5555',
-    coordinates: {
-      latitude: 29.3375,
-      longitude: 47.9275,
-    },
-  },
-  {
-    id: 2,
-    name: 'Farwaniya Branch',
-    address: 'Farwaniya, Block 3, Street 45',
-    phone: '+965 2473 6666',
-    coordinates: {
-      latitude: 29.2772,
-      longitude: 47.9588,
-    },
-  },
-  {
-    id: 3,
-    name: 'Hawally Branch',
-    address: 'Hawally, Salem Mubarak Street',
-    phone: '+965 2262 7777',
-    coordinates: {
-      latitude: 29.3328,
-      longitude: 48.0289,
-    },
-  },
-  {
-    id: 4,
-    name: 'Jahra Branch',
-    address: 'Jahra, Block 2, Street 8',
-    phone: '+965 2455 8888',
-    coordinates: {
-      latitude: 29.3375,
-      longitude: 47.6581,
-    },
-  },
-  {
-    id: 5,
-    name: 'Ahmadi Branch',
-    address: 'Ahmadi, Main Street, Block 5',
-    phone: '+965 2398 9999',
-    coordinates: {
-      latitude: 29.0769,
-      longitude: 48.0839,
-    },
-  },
-];
-
 interface BranchCardProps {
-  name: string;
-  address: string;
-  phone: string;
+  branch: Branch;
   onCallPress: () => void;
   onDirectionsPress: () => void;
 }
 
-const BranchCard = ({ name, address, phone, onCallPress, onDirectionsPress }: BranchCardProps) => (
+const BranchCard = ({ branch, onCallPress, onDirectionsPress }: BranchCardProps) => (
   <View style={styles.branchCard}>
     <View style={styles.branchInfo}>
-      <Text style={styles.branchName}>{name}</Text>
-      <Text style={styles.branchAddress}>{address}</Text>
-      <Text style={styles.branchPhone}>{phone}</Text>
+      <Text style={styles.branchName}>{branch.name}</Text>
+      <Text style={styles.branchAddress}>{branch.address}</Text>
+      <Text style={styles.branchPhone}>{branch.phone}</Text>
     </View>
     <View style={styles.branchActions}>
       <TouchableOpacity style={styles.actionButton} onPress={onCallPress}>
@@ -93,6 +41,32 @@ const BranchCard = ({ name, address, phone, onCallPress, onDirectionsPress }: Br
 
 export default function OurBranchesScreen() {
   const router = useRouter();
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  const fetchBranches = async () => {
+    try {
+      setLoading(true);
+      const response = await branchService.getAllBranches();
+      setBranches(response.branches || []);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load branches. Please try again.');
+      console.error('Failed to fetch branches:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchBranches();
+    setRefreshing(false);
+  };
 
   const handleCall = (phone: string) => {
     const phoneUrl = `tel:${phone}`;
@@ -108,6 +82,27 @@ export default function OurBranchesScreen() {
     const url = 'https://www.google.com/maps/search/?api=1&query=29.3117,47.4818';
     Linking.openURL(url);
   };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <BackButton onPress={() => router.back()} />
+          <Text style={styles.headerTitle}>Our Branches</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.languageSelector}>
+              <Text style={styles.languageText}>EN</Text>
+              <Text style={styles.dropdownIcon}>▼</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#E41E26" />
+          <Text style={styles.loadingText}>Loading branches...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -125,7 +120,12 @@ export default function OurBranchesScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E41E26']} />
+        }
+      >
         {/* Map Placeholder */}
         <TouchableOpacity style={styles.mapContainer} onPress={openInGoogleMaps} activeOpacity={0.9}>
           <View style={styles.mapPlaceholder}>
@@ -133,7 +133,7 @@ export default function OurBranchesScreen() {
             <Text style={styles.mapText}>Kuwait - All Branches</Text>
             <Text style={styles.mapSubtext}>Tap to open in Google Maps</Text>
             <View style={styles.markerContainer}>
-              {branchLocations.map((branch) => (
+              {branches.map((branch) => (
                 <View key={branch.id} style={styles.marker}>
                   <Text style={styles.markerIcon}>📍</Text>
                   <Text style={styles.markerText}>{branch.name.split(' ')[0]}</Text>
@@ -146,22 +146,26 @@ export default function OurBranchesScreen() {
         {/* Branch List */}
         <View style={styles.branchList}>
           <Text style={styles.sectionTitle}>All Branches</Text>
-          {branchLocations.map((branch) => (
-            <BranchCard
-              key={branch.id}
-              name={branch.name}
-              address={branch.address}
-              phone={branch.phone}
-              onCallPress={() => handleCall(branch.phone)}
-              onDirectionsPress={() =>
-                handleDirections(
-                  branch.coordinates.latitude,
-                  branch.coordinates.longitude,
-                  branch.name
-                )
-              }
-            />
-          ))}
+          {branches.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No branches available</Text>
+            </View>
+          ) : (
+            branches.map((branch) => (
+              <BranchCard
+                key={branch.id}
+                branch={branch}
+                onCallPress={() => handleCall(branch.phone)}
+                onDirectionsPress={() =>
+                  handleDirections(
+                    branch.coordinates.latitude,
+                    branch.coordinates.longitude,
+                    branch.name
+                  )
+                }
+              />
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -172,6 +176,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

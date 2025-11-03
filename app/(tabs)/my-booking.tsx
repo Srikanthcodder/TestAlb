@@ -6,9 +6,10 @@ import { images } from '@/constants/images';
 import { Colors } from '@/constants/theme';
 import { useCart } from '@/contexts/CartContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { bookingService, type Booking } from '@/services';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Image, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, RefreshControl, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 export default function MyBookingScreen() {
   const colorScheme = useColorScheme();
@@ -16,6 +17,87 @@ export default function MyBookingScreen() {
   const router = useRouter();
   const { getCartCount } = useCart();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+  const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  useEffect(() => {
+    filterBookings();
+  }, [activeTab, allBookings]);
+
+  const fetchBookings = async () => {
+    try {
+      setLoading(true);
+      const response = await bookingService.getAllBookings();
+      setAllBookings(response.bookings || []);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load bookings. Please try again.');
+      console.error('Failed to fetch bookings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchBookings();
+    setRefreshing(false);
+  };
+
+  const filterBookings = () => {
+    const filtered = allBookings.filter(booking => booking.status === activeTab);
+    setFilteredBookings(filtered);
+  };
+
+  const renderBookingCard = ({ item }: { item: Booking }) => (
+    <View style={styles.bookingCard}>
+      <View style={styles.bookingHeader}>
+        <ThemedText style={styles.bookingId}>Booking #{item.id}</ThemedText>
+        <View style={[
+          styles.statusBadge,
+          item.status === 'upcoming' && styles.upcomingBadge,
+          item.status === 'completed' && styles.completedBadge,
+          item.status === 'cancelled' && styles.cancelledBadge,
+        ]}>
+          <ThemedText style={styles.statusText}>{item.status.toUpperCase()}</ThemedText>
+        </View>
+      </View>
+
+      <View style={styles.bookingDetails}>
+        <ThemedText style={styles.serviceTitle}>{item.serviceName}</ThemedText>
+        <ThemedText style={styles.packageName}>{item.packageName}</ThemedText>
+        <View style={styles.detailRow}>
+          <ThemedText style={styles.detailLabel}>Date:</ThemedText>
+          <ThemedText style={styles.detailValue}>{new Date(item.scheduledDate).toLocaleDateString()}</ThemedText>
+        </View>
+        <View style={styles.detailRow}>
+          <ThemedText style={styles.detailLabel}>Time:</ThemedText>
+          <ThemedText style={styles.detailValue}>{item.scheduledTime}</ThemedText>
+        </View>
+        {item.vehicleInfo && (
+          <View style={styles.detailRow}>
+            <ThemedText style={styles.detailLabel}>Vehicle:</ThemedText>
+            <ThemedText style={styles.detailValue}>{item.vehicleInfo.make} {item.vehicleInfo.model}</ThemedText>
+          </View>
+        )}
+        {item.location && (
+          <View style={styles.detailRow}>
+            <ThemedText style={styles.detailLabel}>Location:</ThemedText>
+            <ThemedText style={styles.detailValue} numberOfLines={1}>{item.location.address}</ThemedText>
+          </View>
+        )}
+        <View style={styles.detailRow}>
+          <ThemedText style={styles.detailLabel}>Total:</ThemedText>
+          <ThemedText style={styles.priceValue}>KWD {item.price.toFixed(3)}</ThemedText>
+        </View>
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -71,9 +153,28 @@ export default function MyBookingScreen() {
         </View>
 
         {/* Content */}
-        <View style={styles.content}>
-          <ThemedText style={styles.noDataText}>No data found</ThemedText>
-        </View>
+        {loading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#E41E26" />
+            <ThemedText style={styles.loadingText}>Loading bookings...</ThemedText>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredBookings}
+            renderItem={renderBookingCard}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E41E26']} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <ThemedText style={styles.noDataText}>No {activeTab} bookings found</ThemedText>
+              </View>
+            }
+          />
+        )}
       </ThemedView>
     </SafeAreaView>
   );
@@ -162,6 +263,105 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#ff0000',
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  listContent: {
+    padding: 20,
+  },
+  emptyContainer: {
+    paddingVertical: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bookingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bookingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  bookingId: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  upcomingBadge: {
+    backgroundColor: '#E3F2FD',
+  },
+  completedBadge: {
+    backgroundColor: '#E8F5E9',
+  },
+  cancelledBadge: {
+    backgroundColor: '#FFEBEE',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  bookingDetails: {
+    gap: 8,
+  },
+  serviceTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#E41E26',
+    marginBottom: 4,
+  },
+  packageName: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+  },
+  priceValue: {
+    fontSize: 16,
+    color: '#E41E26',
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,

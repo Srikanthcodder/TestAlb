@@ -1,39 +1,72 @@
 import BackButton from '@/components/BackButton';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { notificationService, type Notification } from '@/services';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { FlatList, SafeAreaView, StyleSheet, View } from 'react-native';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  date: string;
-}
-
-const notifications: Notification[] = [
-  {
-    id: '1',
-    title: 'Registration',
-    message: 'Successfully Registered',
-    date: '24/10/2025, 11:09',
-  },
-  // Add more notifications here as needed
-];
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, RefreshControl, SafeAreaView, StyleSheet, View } from 'react-native';
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await notificationService.getAllNotifications();
+      setNotifications(response.notifications || []);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load notifications. Please try again.');
+      console.error('Failed to fetch notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
 
   const renderNotification = ({ item }: { item: Notification }) => (
-    <View style={styles.notificationCard}>
+    <View style={[styles.notificationCard, !item.read && styles.unreadCard]}>
       <View style={styles.notificationHeader}>
         <ThemedText style={styles.notificationTitle}>{item.title}</ThemedText>
-        <ThemedText style={styles.notificationDate}>{item.date}</ThemedText>
+        <ThemedText style={styles.notificationDate}>{new Date(item.date).toLocaleString()}</ThemedText>
       </View>
       <ThemedText style={styles.notificationMessage}>{item.message}</ThemedText>
+      {!item.read && <View style={styles.unreadDot} />}
     </View>
   );
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.container}>
+          <View style={styles.header}>
+            <BackButton onPress={() => router.back()} />
+            <ThemedText style={styles.headerTitle}>Notifications</ThemedText>
+            <View style={styles.languageSelector}>
+              <ThemedText style={styles.languageText}>EN</ThemedText>
+              <ThemedText style={styles.languageArrow}>∨</ThemedText>
+            </View>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#E41E26" />
+            <ThemedText style={styles.loadingText}>Loading notifications...</ThemedText>
+          </View>
+        </ThemedView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -55,6 +88,14 @@ export default function NotificationsScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E41E26']} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <ThemedText style={styles.emptyText}>No notifications yet</ThemedText>
+            </View>
+          }
         />
       </ThemedView>
     </SafeAreaView>
@@ -69,6 +110,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -141,5 +202,19 @@ const styles = StyleSheet.create({
   notificationMessage: {
     fontSize: 16,
     color: '#000000',
+  },
+  unreadCard: {
+    backgroundColor: '#FFF3F3',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E41E26',
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E41E26',
   },
 });

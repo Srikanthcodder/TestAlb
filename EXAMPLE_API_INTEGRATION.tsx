@@ -1,21 +1,22 @@
+// Example: batteries-listing.tsx with API integration
+// This is a template showing how to integrate APIs into your screens
+
 import CartIcon from '@/components/icons/CartIcon';
 import { useCart } from '@/contexts/CartContext';
-import { productService, type Product } from '@/services';
+import { Product, productService } from '@/services';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 interface ProductCardProps {
@@ -23,15 +24,8 @@ interface ProductCardProps {
   onAddToCart: (quantity: number) => void;
 }
 
-const ProductCard = ({ 
-  product,
-  onAddToCart 
-}: ProductCardProps) => {
+const ProductCard = ({ product, onAddToCart }: ProductCardProps) => {
   const [quantity, setQuantity] = useState(1);
-
-  const hasDiscount = product.originalPrice && product.originalPrice > product.price;
-  const displayPrice = product.price;
-  const originalPriceValue = product.originalPrice;
 
   return (
     <View style={styles.productCard}>
@@ -52,7 +46,7 @@ const ProductCard = ({
 
       <View style={styles.productImageContainer}>
         <Image
-          source={require('@/assets/images/lubricant_card_icon.png')}
+          source={require('@/assets/images/battery_card_icon.png')}
           style={styles.productImage}
           resizeMode="contain"
         />
@@ -76,10 +70,10 @@ const ProductCard = ({
 
       <View style={styles.priceContainer}>
         <Text style={styles.priceLabel}>KWD</Text>
-        {hasDiscount && originalPriceValue && (
-          <Text style={styles.originalPrice}>{originalPriceValue.toFixed(3)}</Text>
+        {product.originalPrice && (
+          <Text style={styles.originalPrice}>{product.originalPrice.toFixed(3)}</Text>
         )}
-        <Text style={styles.price}>{displayPrice.toFixed(3)}</Text>
+        <Text style={styles.price}>{product.price.toFixed(3)}</Text>
       </View>
 
       <View style={styles.actionContainer}>
@@ -109,58 +103,43 @@ const ProductCard = ({
   );
 };
 
-export default function LubricantsListingScreen() {
+export default function BatteriesListingScreen() {
   const router = useRouter();
   const { getCartCount, addToCart } = useCart();
+  
+  // State for API data
   const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchLubricants();
-    }, [])
-  );
+  // Fetch products on mount
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
-  const fetchLubricants = async () => {
+  const fetchProducts = async (search?: string) => {
     try {
       setLoading(true);
-      const response = await productService.getLubricants();
-      // Response interceptor already returns response.data
-      if (response && response.products) {
-        setProducts(response.products);
-        setFilteredProducts(response.products);
-      } else {
-        console.error('Unexpected response structure:', response);
-        Alert.alert('Error', 'Invalid data format received');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load lubricants');
-      console.error('Error fetching lubricants:', error);
+      setError(null);
+      
+      const filters = search ? { search } : {};
+      const response = await productService.getBatteries(filters);
+      
+      setProducts(response.products || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch products');
+      console.error('Error fetching batteries:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchLubricants();
-    setRefreshing(false);
-  };
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (query.trim() === '') {
-      setFilteredProducts(products);
-    } else {
-      const filtered = products.filter(product => 
-        product.name.toLowerCase().includes(query.toLowerCase()) ||
-        product.sku.toLowerCase().includes(query.toLowerCase()) ||
-        product.brand.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredProducts(filtered);
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    // Debounce search in production
+    if (text.length > 2 || text.length === 0) {
+      fetchProducts(text);
     }
   };
 
@@ -171,43 +150,18 @@ export default function LubricantsListingScreen() {
         name: product.name,
         price: product.price,
         type: 'product',
-        icon: 'lubricant',
+        icon: 'battery',
       });
     }
   };
 
-  if (loading) {
+  // Loading state
+  if (loading && products.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => router.back()} 
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={28} color="#000" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.languageSelector}>
-              <Text style={styles.languageText}>EN</Text>
-              <Ionicons name="chevron-down" size={16} color="#E41E26" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.cartButton}
-              onPress={() => router.push('/cart')}
-            >
-              <CartIcon size={24} color="#000" />
-              {getCartCount() > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{getCartCount()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-        <View style={[styles.scrollView, { justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={[styles.container, styles.centerContent]}>
           <ActivityIndicator size="large" color="#E41E26" />
+          <Text style={styles.loadingText}>Loading products...</Text>
         </View>
       </SafeAreaView>
     );
@@ -259,25 +213,35 @@ export default function LubricantsListingScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#E41E26']} />
-        }
-      >
-        {filteredProducts.length === 0 ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, color: '#999' }}>No lubricants found</Text>
-          </View>
-        ) : (
-          <View style={styles.productsGrid}>
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={(quantity) => handleAddToCart(product, quantity)}
-              />
-            ))}
+      {/* Error state */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => fetchProducts()}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Products list */}
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.productsGrid}>
+          {products.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onAddToCart={(quantity) => handleAddToCart(product, quantity)}
+            />
+          ))}
+        </View>
+
+        {/* Empty state */}
+        {!loading && products.length === 0 && !error && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No products found</Text>
           </View>
         )}
       </ScrollView>
@@ -285,7 +249,49 @@ export default function LubricantsListingScreen() {
   );
 }
 
+// [Styles remain the same as original file - just add these new styles]
 const styles = StyleSheet.create({
+  // ... (keep all existing styles)
+  // Add these new styles:
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#E41E26',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  retryButton: {
+    backgroundColor: '#E41E26',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  // Include all other existing styles from the original file
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -478,11 +484,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#E41E26',
     fontStyle: 'italic',
-  },
-  brandLogo: {
-    width: 80,
-    height: 30,
-    marginBottom: 8,
   },
   productTitle: {
     fontSize: 13,

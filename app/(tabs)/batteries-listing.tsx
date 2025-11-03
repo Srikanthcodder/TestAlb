@@ -1,45 +1,41 @@
 import CartIcon from '@/components/icons/CartIcon';
 import { useCart } from '@/contexts/CartContext';
+import { productService, type Product } from '@/services';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface ProductCardProps {
-  title: string;
-  subtitle: string;
-  price: string;
-  originalPrice?: string;
-  discount?: string;
-  warranty?: string;
-  specialOffer?: boolean;
+  product: Product;
   onAddToCart: (quantity: number) => void;
 }
 
 const ProductCard = ({ 
-  title, 
-  subtitle, 
-  price, 
-  originalPrice, 
-  discount, 
-  warranty, 
-  specialOffer,
+  product,
   onAddToCart 
 }: ProductCardProps) => {
   const [quantity, setQuantity] = useState(1);
+  
+  const hasDiscount = product.originalPrice && product.originalPrice > product.price;
+  const displayPrice = product.price;
+  const originalPriceValue = product.originalPrice;
 
   return (
     <View style={styles.productCard}>
-      {specialOffer && (
+      {product.specialOffer && (
         <View style={styles.specialOfferBanner}>
           <Ionicons name="caret-down" size={20} color="#fff" style={styles.caretLeft} />
           <Text style={styles.specialOfferText}>SPECIAL OFFER</Text>
@@ -47,9 +43,9 @@ const ProductCard = ({
         </View>
       )}
       
-      {discount && (
+      {product.discount && (
         <View style={styles.discountBadge}>
-          <Text style={styles.discountText}>{discount}</Text>
+          <Text style={styles.discountText}>{product.discount}</Text>
           <Text style={styles.offText}>OFF</Text>
         </View>
       )}
@@ -62,28 +58,28 @@ const ProductCard = ({
         />
       </View>
 
-      {warranty && (
+      {product.warranty && (
         <View style={styles.warrantyContainer}>
           <View style={styles.warrantyBadge}>
-            <Text style={styles.warrantyText}>{warranty}</Text>
+            <Text style={styles.warrantyText}>{product.warranty}</Text>
           </View>
           <Text style={styles.warrantyLabel}>Warranty</Text>
         </View>
       )}
 
       <View style={styles.brandLogoContainer}>
-        <Text style={styles.brandLogoText}>EMTRAC Plus</Text>
+        <Text style={styles.brandLogoText}>{product.brand}</Text>
       </View>
 
-      <Text style={styles.productTitle}>{title}</Text>
-      <Text style={styles.productSubtitle}>{subtitle}</Text>
+      <Text style={styles.productTitle}>{product.name}</Text>
+      <Text style={styles.productSubtitle}>{product.sku}</Text>
 
       <View style={styles.priceContainer}>
         <Text style={styles.priceLabel}>KWD</Text>
-        {originalPrice && (
-          <Text style={styles.originalPrice}>{originalPrice}</Text>
+        {hasDiscount && originalPriceValue && (
+          <Text style={styles.originalPrice}>{originalPriceValue.toFixed(3)}</Text>
         )}
-        <Text style={styles.price}>{price}</Text>
+        <Text style={styles.price}>{displayPrice.toFixed(3)}</Text>
       </View>
 
       <View style={styles.actionContainer}>
@@ -116,19 +112,80 @@ const ProductCard = ({
 export default function BatteriesListingScreen() {
   const router = useRouter();
   const { getCartCount, addToCart } = useCart();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const handleAddToCart = (productId: string, title: string, price: string, quantity: number) => {
-    // Add item to cart multiple times based on quantity
+  // Fetch data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchBatteries();
+    }, [])
+  );
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.brand.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [searchQuery, products]);
+
+  const fetchBatteries = async () => {
+    try {
+      setLoading(true);
+      const response = await productService.getBatteries();
+      // Response interceptor already returns response.data
+      if (response && response.products) {
+        setProducts(response.products);
+        setFilteredProducts(response.products);
+      } else {
+        console.error('Unexpected response structure:', response);
+        Alert.alert('Error', 'Invalid data format received');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load batteries. Please try again.');
+      console.error('Failed to fetch batteries:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchBatteries();
+    setRefreshing(false);
+  };
+
+  const handleAddToCart = (product: Product, quantity: number) => {
     for (let i = 0; i < quantity; i++) {
       addToCart({
-        id: `${productId}-${Date.now()}-${i}`,
-        name: title,
-        price: parseFloat(price),
+        id: `${product.id}-${Date.now()}-${i}`,
+        name: product.name,
+        price: product.price,
         type: 'product',
         icon: 'battery',
       });
     }
   };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#E41E26" />
+          <Text style={styles.loadingText}>Loading batteries...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -167,6 +224,8 @@ export default function BatteriesListingScreen() {
             style={styles.searchInput}
             placeholder="Search by SKU or brand name"
             placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
         </View>
         <TouchableOpacity style={styles.filterButton}>
@@ -174,187 +233,29 @@ export default function BatteriesListingScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.productsGrid}>
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-105D31L"
-            subtitle="MF-105D31L"
-            price="47.159"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-1', 'Batteries-EMTRAC PLUS-MF-105D31L', '47.159', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-105D31R"
-            subtitle="MF-105D31R"
-            price="35.369"
-            originalPrice="47.159"
-            discount="25%"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-2', 'Batteries-EMTRAC PLUS-MF-105D31R', '35.369', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-105D31L"
-            subtitle="MF-105D31L"
-            price="47.159"
-            discount="25%"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-3', 'Batteries-EMTRAC PLUS-MF-105D31L', '47.159', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-105D31R"
-            subtitle="MF-105D31R"
-            price="35.369"
-            originalPrice="47.159"
-            discount="25%"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-4', 'Batteries-EMTRAC PLUS-MF-105D31R', '35.369', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-80D26L"
-            subtitle="MF-80D26L"
-            price="52.000"
-            warranty="3 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-5', 'Batteries-EMTRAC PLUS-MF-80D26L', '52.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-80D26R"
-            subtitle="MF-80D26R"
-            price="39.000"
-            originalPrice="52.000"
-            discount="25%"
-            warranty="3 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-6', 'Batteries-EMTRAC PLUS-MF-80D26R', '39.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-55B24L"
-            subtitle="MF-55B24L"
-            price="42.500"
-            discount="15%"
-            warranty="2 YEAR"
-            onAddToCart={(quantity) => handleAddToCart('battery-7', 'Batteries-EMTRAC PLUS-MF-55B24L', '42.500', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-55B24R"
-            subtitle="MF-55B24R"
-            price="38.250"
-            originalPrice="45.000"
-            discount="15%"
-            warranty="2 YEAR"
-            onAddToCart={(quantity) => handleAddToCart('battery-8', 'Batteries-EMTRAC PLUS-MF-55B24R', '38.250', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-75D23L"
-            subtitle="MF-75D23L"
-            price="48.000"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-9', 'Batteries-EMTRAC PLUS-MF-75D23L', '48.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-75D23R"
-            subtitle="MF-75D23R"
-            price="36.000"
-            originalPrice="48.000"
-            discount="25%"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-10', 'Batteries-EMTRAC PLUS-MF-75D23R', '36.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-95D31L"
-            subtitle="MF-95D31L"
-            price="55.000"
-            warranty="3 YEAR"
-            onAddToCart={(quantity) => handleAddToCart('battery-11', 'Batteries-EMTRAC PLUS-MF-95D31L', '55.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-95D31R"
-            subtitle="MF-95D31R"
-            price="44.000"
-            originalPrice="55.000"
-            discount="20%"
-            warranty="3 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-12', 'Batteries-EMTRAC PLUS-MF-95D31R', '44.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-65D23L"
-            subtitle="MF-65D23L"
-            price="43.500"
-            discount="10%"
-            warranty="2 YEAR"
-            onAddToCart={(quantity) => handleAddToCart('battery-13', 'Batteries-EMTRAC PLUS-MF-65D23L', '43.500', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-65D23R"
-            subtitle="MF-65D23R"
-            price="39.150"
-            originalPrice="43.500"
-            discount="10%"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-14', 'Batteries-EMTRAC PLUS-MF-65D23R', '39.150', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-90D26L"
-            subtitle="MF-90D26L"
-            price="58.000"
-            warranty="3 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-15', 'Batteries-EMTRAC PLUS-MF-90D26L', '58.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-90D26R"
-            subtitle="MF-90D26R"
-            price="46.400"
-            originalPrice="58.000"
-            discount="20%"
-            warranty="3 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-16', 'Batteries-EMTRAC PLUS-MF-90D26R', '46.400', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-45B19L"
-            subtitle="MF-45B19L"
-            price="36.500"
-            warranty="2 YEAR"
-            onAddToCart={(quantity) => handleAddToCart('battery-17', 'Batteries-EMTRAC PLUS-MF-45B19L', '36.500', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-45B19R"
-            subtitle="MF-45B19R"
-            price="32.850"
-            originalPrice="36.500"
-            discount="10%"
-            warranty="2 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-18', 'Batteries-EMTRAC PLUS-MF-45B19R', '32.850', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-70D23L"
-            subtitle="MF-70D23L"
-            price="50.000"
-            warranty="3 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-19', 'Batteries-EMTRAC PLUS-MF-70D23L', '50.000', quantity)}
-          />
-          <ProductCard
-            title="Batteries-EMTRAC PLUS-MF-70D23R"
-            subtitle="MF-70D23R"
-            price="42.500"
-            originalPrice="50.000"
-            discount="15%"
-            warranty="3 YEAR"
-            specialOffer={true}
-            onAddToCart={(quantity) => handleAddToCart('battery-20', 'Batteries-EMTRAC PLUS-MF-70D23R', '42.500', quantity)}
-          />
-        </View>
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E41E26']} />
+        }
+      >
+        {filteredProducts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              {searchQuery ? 'No batteries found matching your search.' : 'No batteries available.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.productsGrid}>
+            {filteredProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={(quantity) => handleAddToCart(product, quantity)}
+              />
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -364,6 +265,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

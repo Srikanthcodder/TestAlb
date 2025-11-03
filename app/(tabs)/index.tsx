@@ -7,10 +7,11 @@ import { images } from '@/constants/images';
 import { Colors } from '@/constants/theme';
 import { useCart } from '@/contexts/CartContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { promotionService, type Promotion } from '@/services';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { FlatList, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native';
 
 interface ServiceCardProps {
   icon: { uri: string };
@@ -23,12 +24,6 @@ interface QuickButtonProps {
   style?: ViewStyle;
   onPress?: () => void;
 }
-
-const promotions = [
-  { id: '1', image: images.promo1 },
-  { id: '2', image: images.promo2 },
-  { id: '3', image: images.promo3 },
-];
 
 const ServiceCard = ({ icon, title, onPress }: ServiceCardProps) => (
   <TouchableOpacity style={styles.serviceCard} onPress={onPress}>
@@ -45,10 +40,35 @@ const QuickButton = ({ title, style, onPress }: QuickButtonProps) => (
 
 export default function HomeScreen() {
   const [activeSlide, setActiveSlide] = useState(0);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [loading, setLoading] = useState(true);
   const colorScheme = useColorScheme();
   const iconColor = Colors[colorScheme ?? 'light'].text;
   const router = useRouter();
   const { getCartCount } = useCart();
+
+  useEffect(() => {
+    fetchPromotions();
+  }, []);
+
+  const fetchPromotions = async () => {
+    try {
+      setLoading(true);
+      const response = await promotionService.getAllPromotions({ featured: true });
+      setPromotions(response.promotions || []);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load promotions.');
+      console.error('Failed to fetch promotions:', error);
+      // Set fallback promotions if API fails
+      setPromotions([
+        { id: '1', title: 'Promo 1', description: '', image: images.promo1, validFrom: '', validUntil: '', featured: true },
+        { id: '2', title: 'Promo 2', description: '', image: images.promo2, validFrom: '', validUntil: '', featured: true },
+        { id: '3', title: 'Promo 3', description: '', image: images.promo3, validFrom: '', validUntil: '', featured: true },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -83,29 +103,41 @@ export default function HomeScreen() {
       <ThemedView style={styles.content}>
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Promotions</ThemedText>
-          <FlatList
-            data={promotions}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={({ nativeEvent }) => {
-              const slide = Math.ceil(nativeEvent.contentOffset.x / nativeEvent.layoutMeasurement.width);
-              if (slide !== activeSlide) {
-                setActiveSlide(slide);
-              }
-            }}
-            renderItem={({ item }) => (
-              <View style={styles.promoPlaceholder}>
-                <Image source={item.image} style={styles.promoImage} contentFit="cover" />
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#E41E26" />
+            </View>
+          ) : promotions.length > 0 ? (
+            <>
+              <FlatList
+                data={promotions}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={({ nativeEvent }) => {
+                  const slide = Math.ceil(nativeEvent.contentOffset.x / nativeEvent.layoutMeasurement.width);
+                  if (slide !== activeSlide) {
+                    setActiveSlide(slide);
+                  }
+                }}
+                renderItem={({ item }) => (
+                  <View style={styles.promoPlaceholder}>
+                    <Image source={item.image} style={styles.promoImage} contentFit="cover" />
+                  </View>
+                )}
+                keyExtractor={item => item.id}
+              />
+              <View style={styles.pagination}>
+                {promotions.map((_, index) => (
+                  <View key={index} style={[styles.paginationDot, activeSlide === index && styles.paginationDotActive]} />
+                ))}
               </View>
-            )}
-            keyExtractor={item => item.id}
-          />
-          <View style={styles.pagination}>
-            {promotions.map((_, index) => (
-              <View key={index} style={[styles.paginationDot, activeSlide === index && styles.paginationDotActive]} />
-            ))}
-          </View>
+            </>
+          ) : (
+            <View style={styles.emptyPromo}>
+              <ThemedText style={styles.emptyText}>No promotions available</ThemedText>
+            </View>
+          )}
         </View>
 
         <View style={styles.servicesGrid}>
@@ -149,6 +181,20 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyPromo: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
   },
   header: {
     paddingHorizontal: 20,

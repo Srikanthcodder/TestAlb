@@ -3,36 +3,132 @@ import CarWashDoorToDoorIcon from '@/components/icons/CarWashDoorToDoorIcon';
 import CarWashServiceStationIcon from '@/components/icons/CarWashServiceStationIcon';
 import MobileVanServiceIcon from '@/components/icons/MobileVanServiceIcon';
 import TintingProtectionIcon from '@/components/icons/TintingProtectionIcon';
+import { useCart } from '@/contexts/CartContext';
+import { serviceService, type Service } from '@/services';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface ServiceCardProps {
-  icon: React.ReactNode;
-  title: string;
+  service: Service;
   onPress?: () => void;
 }
 
-const ServiceCard = ({ icon, title, onPress }: ServiceCardProps) => (
+const getServiceIcon = (serviceName: string) => {
+  const name = serviceName.toLowerCase();
+  if (name.includes('door to door') || name.includes('door-to-door')) {
+    return <CarWashDoorToDoorIcon size={80} color="#E41E26" />;
+  } else if (name.includes('service station') || name.includes('car wash')) {
+    return <CarWashServiceStationIcon size={80} color="#999" />;
+  } else if (name.includes('tinting') || name.includes('protection')) {
+    return <TintingProtectionIcon size={80} color="#E41E26" />;
+  } else if (name.includes('mobile') || name.includes('van')) {
+    return <MobileVanServiceIcon size={80} color="#555" />;
+  }
+  return <CarWashServiceStationIcon size={80} color="#E41E26" />;
+};
+
+const ServiceCard = ({ service, onPress }: ServiceCardProps) => (
   <TouchableOpacity style={styles.serviceCard} onPress={onPress}>
-    <View style={styles.iconContainer}>{icon}</View>
-    <Text style={styles.serviceTitle}>{title}</Text>
+    <View style={styles.iconContainer}>{getServiceIcon(service.name)}</View>
+    <Text style={styles.serviceTitle}>{service.name}</Text>
+    {service.description && (
+      <Text style={styles.serviceDescription} numberOfLines={2}>{service.description}</Text>
+    )}
   </TouchableOpacity>
 );
 
 export default function OurServicesScreen() {
   const router = useRouter();
+  const { getCartCount } = useCart();
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      setLoading(true);
+      const response = await serviceService.getAllServices();
+      setServices(response.services || []);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load services. Please try again.');
+      console.error('Failed to fetch services:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchServices();
+    setRefreshing(false);
+  };
+
+  const handleServicePress = (service: Service) => {
+    // Navigate to service details or specific service screen
+    const serviceName = service.name.toLowerCase().replace(/\s+/g, '-');
+    router.push(`/${serviceName}` as any);
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => router.back()} 
+            style={styles.backButton}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.headerTitle}>Our Services</Text>
+          
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.languageSelector}>
+              <Text style={styles.languageText}>EN</Text>
+              <Text style={styles.dropdownIcon}>▼</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.cartButton} onPress={() => router.push('/cart')}>
+              <CartIcon size={24} color="#000" />
+              {getCartCount() > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getCartCount()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#E41E26" />
+          <Text style={styles.loadingText}>Loading services...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView>
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E41E26']} />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity 
@@ -51,42 +147,43 @@ export default function OurServicesScreen() {
               <Text style={styles.dropdownIcon}>▼</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.cartButton}>
+            <TouchableOpacity style={styles.cartButton} onPress={() => router.push('/cart')}>
               <CartIcon size={24} color="#000" />
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>1</Text>
-              </View>
+              {getCartCount() > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getCartCount()}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Services Grid */}
         <View style={styles.servicesContainer}>
-          <View style={styles.servicesGrid}>
-            <ServiceCard
-              icon={<CarWashDoorToDoorIcon size={80} color="#E41E26" />}
-              title="CAR WASH DOOR TO DOOR"
-              onPress={() => router.push('/car-wash-door-to-door')}
-            />
-            <ServiceCard
-              icon={<CarWashServiceStationIcon size={80} color="#999" />}
-              title="CAR WASH IN SERVICE STATION"
-              onPress={() => router.push('/car-wash-in-service-station')}
-            />
-          </View>
-
-          <View style={styles.servicesGrid}>
-            <ServiceCard
-              icon={<TintingProtectionIcon size={80} color="#E41E26" />}
-              title="TINTING & PROTECTION"
-              onPress={() => router.push('/tinting-protection')}
-            />
-            <ServiceCard
-              icon={<MobileVanServiceIcon size={80} color="#555" />}
-              title="MOBILE VAN SERVICE"
-              onPress={() => router.push('/mobile-van-service')}
-            />
-          </View>
+          {services.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No services available</Text>
+            </View>
+          ) : (
+            <View style={styles.servicesGridContainer}>
+              {services.map((service, index) => (
+                index % 2 === 0 && (
+                  <View key={`row-${index}`} style={styles.servicesGrid}>
+                    <ServiceCard
+                      service={service}
+                      onPress={() => handleServicePress(service)}
+                    />
+                    {services[index + 1] && (
+                      <ServiceCard
+                        service={services[index + 1]}
+                        onPress={() => handleServicePress(services[index + 1])}
+                      />
+                    )}
+                  </View>
+                )
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -97,6 +194,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -169,6 +286,9 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 24,
   },
+  servicesGridContainer: {
+    gap: 16,
+  },
   servicesGrid: {
     flexDirection: 'row',
     gap: 16,
@@ -200,5 +320,12 @@ const styles = StyleSheet.create({
     color: '#000',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  serviceDescription: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 16,
   },
 });
